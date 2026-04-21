@@ -1,8 +1,3 @@
-const PIECES = {
-  white: { king: '♚', queen: '♛', rook: '♜', bishop: '♝', knight: '♞', pawn: '♟' },
-  black: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' }
-};
-
 const PIECE_SYMBOLS = {
   'K': '♚', 'Q': '♛', 'R': '♜', 'B': '♝', 'N': '♞', 'P': '♟',
   'k': '♔', 'q': '♕', 'r': '♖', 'b': '♗', 'n': '♘', 'p': '♙'
@@ -53,11 +48,11 @@ function initBoard() {
 
 function getPieceColor(piece) {
   if (!piece) return null;
-  return piece === piece.toUpperCase() ? 'white' : 'black';
+  return piece[0] === 'w' ? 'white' : 'black';
 }
 
 function getPieceType(piece) {
-  return piece ? piece.toLowerCase() : null;
+  return piece ? piece[1] : null;
 }
 
 function isOwnPiece(piece, color) {
@@ -66,10 +61,6 @@ function isOwnPiece(piece, color) {
 
 function isEnemyPiece(piece, color) {
   return getPieceColor(piece) === (color === 'white' ? 'black' : 'white');
-}
-
-function getOppPawn(color) {
-  return color === 'white' ? 'p' : 'P';
 }
 
 function getValidMoves(row, col, checkCheck = true) {
@@ -82,7 +73,7 @@ function getValidMoves(row, col, checkCheck = true) {
   const baseMoves = getBaseMoves(type, row, col, color);
   moves = baseMoves.filter(([r, c]) => r >= 0 && r < 8 && c >= 0 && c < 8);
 
-  if (currentChaosRules.some(r => r.apply === 'noCastling') && (type === 'k' || type === 'K')) {
+  if (currentChaosRules.some(r => r.apply === 'noCastling') && type === 'k') {
     return moves;
   }
 
@@ -126,18 +117,14 @@ function getBaseMoves(type, row, col, color) {
           const nr = row + forward, nc = col + dc;
           if (nc >= 0 && nc < 8) {
             if (isEnemyPiece(board[nr]?.[nc], color)) moves.push([nr, nc]);
-            if (currentChaosRules.some(r => r.apply !== 'noEnPassant') && enPassantSquare?.row === row && enPassantSquare?.col === col + dc) {
+            if (!currentChaosRules.some(r => r.apply === 'noEnPassant') && enPassantSquare?.row === row && enPassantSquare?.col === col + dc) {
               moves.push([row + forward, col + dc]);
             }
           }
         }
-        if (pawnSide && board[row]?.[col - 1]) {
-          if (!isOwnPiece(board[row][col - 1], color)) moves.push([row, col - 1]);
-          if (isEnemyPiece(board[row][col - 1], color)) moves.push([row, col - 1]);
-        }
-        if (pawnSide && board[row]?.[col + 1]) {
-          if (!isOwnPiece(board[row][col + 1], color)) moves.push([row, col + 1]);
-          if (isEnemyPiece(board[row][col + 1], color)) moves.push([row, col + 1]);
+        if (pawnSide) {
+          if (col - 1 >= 0 && !isOwnPiece(board[row][col - 1], color)) moves.push([row, col - 1]);
+          if (col + 1 < 8 && !isOwnPiece(board[row][col + 1], color)) moves.push([row, col + 1]);
         }
       }
       break;
@@ -297,7 +284,7 @@ function getBaseMoves(type, row, col, color) {
   return moves;
 }
 
-function canCastle(kingCol, kingRow, color, side) {
+function canCastle(row, col, color, side) {
   if (color === 'white') {
     if (side === 'kingSide' && !castlingRights.white.kingSide) return false;
     if (side === 'queenSide' && !castlingRights.white.queenSide) return false;
@@ -308,9 +295,9 @@ function canCastle(kingCol, kingRow, color, side) {
   const targetRow = color === 'white' ? 7 : 0;
   const targetCol = side === 'kingSide' ? 6 : 2;
   const checkCol = side === 'kingSide' ? 5 : 3;
-  if (board[targetRow][kingCol] !== (color === 'white' ? 'wk' : 'WK')) return false;
+  if (board[targetRow][col] !== (color === 'white' ? 'wk' : 'WK')) return false;
   if (board[targetRow][targetCol] !== null || board[targetRow][checkCol] !== null) return false;
-  if (isSquareAttacked(targetRow, kingCol, color === 'white' ? 'black' : 'white')) return false;
+  if (isSquareAttacked(targetRow, col, color === 'white' ? 'black' : 'white')) return false;
   if (isSquareAttacked(targetRow, checkCol, color === 'white' ? 'black' : 'white')) return false;
   if (isSquareAttacked(targetRow, targetCol, color === 'white' ? 'black' : 'white')) return false;
   return true;
@@ -413,7 +400,8 @@ function hasValidMoves(color) {
     for (let c = 0; c < 8; c++) {
       const piece = board[r][c];
       if (!piece || getPieceColor(piece) !== color) continue;
-      if (getValidMoves(r, c, true).length > 0) return true;
+      const moves = getValidMoves(r, c, true);
+      if (moves && moves.length > 0) return true;
     }
   }
   return false;
@@ -508,9 +496,8 @@ function renderBoard() {
       if (piece) {
         const pieceSpan = document.createElement('span');
         pieceSpan.className = `piece ${getPieceColor(piece)}`;
-        let symbol = PIECE_SYMBOLS[piece];
-        if (!symbol) symbol = piece.toUpperCase();
-        pieceSpan.textContent = symbol;
+        const type = getPieceType(piece);
+        pieceSpan.textContent = PIECE_SYMBOLS[type];
         square.appendChild(pieceSpan);
       }
 
@@ -551,7 +538,7 @@ function handleSquareClick(row, col) {
 
       currentTurn = currentTurn === 'white' ? 'black' : 'white';
       updateTurnIndicator();
-
+      console.log('Turn:', currentTurn, 'hasValid:', hasValidMoves(currentTurn), 'inCheck:', isInCheck(currentTurn));
       if (!hasValidMoves(currentTurn)) {
         if (isInCheck(currentTurn)) {
           showGameOver(currentTurn === 'white' ? 'Black' : 'White');
